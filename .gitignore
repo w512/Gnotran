@@ -1,1 +1,4 @@
 .bzr/
+gnotran.cfg
+.ropeproject/
+dict.py

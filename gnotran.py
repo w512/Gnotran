@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
-Gnotran - simple Gnome client for Google Translate.
+Gnotran - simple Gnome client for translators.
 
 Features:
     1. Very simple and easy to use.
@@ -11,8 +11,8 @@ Features:
 '''
 
 __author__ = 'Nikolay Blohin (nikolay@blohin.org)'
-__version__ = '0.5.4'
-__copyright__ = 'Copyright (c) 2010 Nikolay Blohin'
+__version__ = '0.6.1'
+__copyright__ = 'Copyright (c) 2010-2011 Nikolay Blohin'
 __license__ = 'GNU General Public License'
 
 import os
@@ -20,15 +20,89 @@ import json
 import urllib
 import threading
 import gtk
-import gconf
+import ConfigParser
 
-
-GCONF_PREF_DIR = '/apps/gnotran/preferences'
 
 ABS_Path = os.path.realpath(os.path.dirname(__file__))
 IMAGES_dir = os.path.join(ABS_Path, 'images')
+C_F_P = os.path.join(ABS_Path, 'gnotran.cfg')
 
 
+class DictWindow(gtk.Window):
+    def __init__(self, from_lang, to_lang):
+        super(DictWindow, self).__init__()
+        self.from_lang = from_lang
+        self.to_lang = to_lang
+        
+        self.set_title('Dictionary')
+        self.set_size_request(300, 500)
+        # self.set_position(gtk.WIN_POS_CENTER)
+        self.connect('destroy', self.close)
+        self.set_icon_from_file(os.path.join(IMAGES_dir, 'dictionary-32x32.png'))
+
+        # search string
+        self.vbox = gtk.VBox(False)
+        self.word = gtk.Entry()
+        self.s_button = gtk.Button('Search')
+        self.s_button.connect('clicked', self.s_button_clicked)
+        tmp_hbox = gtk.HBox(False)
+        tmp_hbox.pack_start(self.word, True, True, 5)
+        tmp_hbox.pack_start(self.s_button, False, False, 5)
+        self.vbox.pack_start(tmp_hbox, False, False, 10)
+
+        # field to display
+        self.textview = gtk.TextView()
+        self.textview.set_editable(False)
+        scroll = gtk.ScrolledWindow()
+        viewport = gtk.Viewport()
+        viewport.set_shadow_type(gtk.SHADOW_NONE)
+        result_box = gtk.VBox(False)
+        result_box.pack_start(self.textview, True, True, 10)
+        viewport.add(result_box)
+        viewport.set_border_width(20)
+        scroll.add(viewport)
+        scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        self.vbox.pack_start(scroll, True, True)
+
+        self.add(self.vbox)
+        self.show_all()
+
+
+    def s_button_clicked(self, widget):
+        '''Search word and show result'''
+        word = self.word.get_text()
+        f = self.from_lang
+        t = self.to_lang
+        url_part_1 = 'http://api.microsofttranslator.com/V2/Ajax.svc/GetTranslations?oncomplete=mycallback&appId=18148BBCC187B05F6D0B99CD249C60A833E67944&text='
+        url_part_2 = '&from=%s&to=%s&maxTranslations=5' % (t, f)
+
+        url = url_part_1 + word + url_part_2
+        #try:
+        server_response = urllib.urlopen(url)
+        s = server_response.read()
+
+        s = s[14:]
+        s = s.rstrip(');')
+        print 'After ****************************'
+        print s
+        print '**********************************'
+        print
+        
+
+        response_dict = json.loads(s)
+        #except:
+        #    response_dict = False 
+        
+        text_buffer = self.textview.get_buffer()
+        text_buffer.set_text(response_dict['Translations'][0]['TranslatedText'])
+
+
+    def close(self, widget):
+        ''' Close DictWindow '''
+        self.destroy()
+
+
+        
 class MainWindow(gtk.Window):
 
     def __init__(self):
@@ -125,22 +199,28 @@ class MainWindow(gtk.Window):
             'vietnamese':'vi',
         }
 
-        # Read config from GConf
-        self.gconf_client = gconf.client_get_default()
+        # Read config file
+        self.config = ConfigParser.RawConfigParser()
         try:
-            self.gconf_client.get_value(GCONF_PREF_DIR + '/lang_from')
+            self.config.read(C_F_P)
+            self.config.get('Translator', 'lang_from')
         except:
-            # first run, write default settings to gconf
-            self.gconf_client.set_string(GCONF_PREF_DIR + '/lang_from', 'english')
-            self.gconf_client.set_string(GCONF_PREF_DIR + '/lang_to', 'russian')
-            self.gconf_client.set_bool(GCONF_PREF_DIR + '/one_direction', False)
-            self.gconf_client.set_bool(GCONF_PREF_DIR + '/hide_toolbar', False)
-        self.from_lang = self.gconf_client.get_value(GCONF_PREF_DIR + '/lang_from')
-        self.to_lang = self.gconf_client.get_value(GCONF_PREF_DIR + '/lang_to')
-        self.one_direction = self.gconf_client.get_value(GCONF_PREF_DIR + '/one_direction')
-        self.hide_toolbar = self.gconf_client.get_value(GCONF_PREF_DIR + '/hide_toolbar')
+            # first run, write default settings to config
+            self.config.add_section('Translator')
+            self.config.set('Translator', 'lang_from', 'english')
+            self.config.set('Translator', 'lang_to', 'russian')
+            self.config.set('Translator', 'one_direction', 'false')
+            self.config.set('Translator', 'hide_toolbar', 'false')
+            with open(C_F_P, 'wb') as configfile:
+                self.config.write(configfile)
+                
+            
+        self.from_lang = self.config.get('Translator', 'lang_from')
+        self.to_lang = self.config.get('Translator', 'lang_to')
+        self.one_direction = self.config.getboolean('Translator', 'one_direction')
+        self.hide_toolbar = self.config.getboolean('Translator', 'hide_toolbar')
 
-        self.set_title('Gnotran - simple Gnome client for Google Translate')
+        self.set_title('Gnotran - simple Gnome client for translators')
         self.set_icon_from_file(os.path.join(IMAGES_dir, 'google-32x32.png'))
         self.set_default_size(650, 550)
         self.set_resizable(True)
@@ -158,6 +238,10 @@ class MainWindow(gtk.Window):
         image_2 = gtk.Image()
         image_2.set_from_pixbuf(img2)
 
+        img3 = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'dictionary-16x16.png'))
+        image_3 = gtk.Image()
+        image_3.set_from_pixbuf(img3)        
+
 
         # file menu
         filemenu = gtk.Menu()
@@ -173,6 +257,14 @@ class MainWindow(gtk.Window):
         m_lang.add_accelerator('activate', agr, key, mod, gtk.ACCEL_VISIBLE)
         m_lang.connect('activate', self.choice_lang)
         filemenu.append(m_lang)
+
+        m_dict = gtk.ImageMenuItem('_Dictionary', agr)
+        m_dict.set_image(image_3)
+        key, mod = gtk.accelerator_parse('<Control>D')
+        m_dict.add_accelerator('activate', agr, key, mod, gtk.ACCEL_VISIBLE)
+        m_dict.connect('activate', self.call_dict)
+        filemenu.append(m_dict)
+
 
         sep = gtk.SeparatorMenuItem()
         filemenu.append(sep)
@@ -359,18 +451,23 @@ class MainWindow(gtk.Window):
         img3 = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'exit-32x32.png'))
         image3 = gtk.Image()
         image3.set_from_pixbuf(img3)
-
+        img4 = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'dictionary-32x32.png'))
+        image4 = gtk.Image()
+        image4.set_from_pixbuf(img4)
 
 
         add_btn = gtk.ToolButton(image1, 'Language')
         add_btn.connect('clicked', self.choice_lang)
+        dict_btn = gtk.ToolButton(image4, 'Dictionary')
+        dict_btn.connect('clicked', self.call_dict)
         about_btn = gtk.ToolButton(image2, 'About')
         about_btn.connect('clicked', self.about)
         exit_btn = gtk.ToolButton(image3, 'Exit')
         exit_btn.connect('clicked', self.pr_exit)
 
         self.toolbar.insert(add_btn, 0)
-        self.toolbar.insert(about_btn, 1)
+        self.toolbar.insert(dict_btn, 1)
+        self.toolbar.insert(about_btn, 2)
         self.toolbar.insert(exit_btn, -1)
 
         hbox = gtk.HBox(True, 20)
@@ -399,27 +496,41 @@ class MainWindow(gtk.Window):
             self.toolbar.hide()
 
 
+    def call_dict(self, widget):
+        '''Show dictionary window'''
+        c_from = self.all_lang[self.to_lang]
+        c_to = self.all_lang[self.from_lang]
+        DictWindow(c_from, c_to)
+
+
     def show_hide_toolbar(self, widget):
         ''' Switch from one to two directions of translate '''
         if widget.get_active():
             # remove toolbar
             self.toolbar.hide()
-            self.gconf_client.set_bool(GCONF_PREF_DIR + '/hide_toolbar', True)
+            self.config.set('Translator', 'hide_toolbar', 'true')
         else:
             # restore toolbar
             self.toolbar.show()
-            self.gconf_client.set_bool(GCONF_PREF_DIR + '/hide_toolbar', False)
+            self.config.set('Translator', 'hide_toolbar', 'false')
+        with open(C_F_P, 'wb') as configfile:
+            self.config.write(configfile)        
+        
 
     def one_two(self, widget):
         ''' Switch from one to two directions of translate '''
         if widget.get_active():
             # remove right textviews
             self.vbox_r.hide()
-            self.gconf_client.set_bool(GCONF_PREF_DIR + '/one_direction', True)
+            self.config.set('Translator', 'one_direction', 'true')
         else:
             # restore right textviews
             self.vbox_r.show()
-            self.gconf_client.set_bool(GCONF_PREF_DIR + '/one_direction', False)
+            self.config.set('Translator', 'one_direction', 'false')
+        with open(C_F_P, 'wb') as configfile:
+            self.config.write(configfile)
+            
+      
 
     def choice_lang(self, widget):
 
@@ -436,8 +547,11 @@ class MainWindow(gtk.Window):
             self.left_label.set_use_markup(True)
             self.right_label.set_use_markup(True)
             # write selected language in config
-            self.gconf_client.set_string(GCONF_PREF_DIR + '/lang_from', self.from_lang)
-            self.gconf_client.set_string(GCONF_PREF_DIR + '/lang_to', self.to_lang)
+            self.config.set('Translator', 'lang_from', self.from_lang)
+            self.config.set('Translator', 'lang_to', self.to_lang)
+            with open(C_F_P, 'wb') as configfile:
+                self.config.write(configfile)
+            
 
         def swap_lang(widget):
             self.from_lang, self.to_lang = self.to_lang, self.from_lang
