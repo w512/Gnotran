@@ -207,6 +207,7 @@ class MainWindow(gtk.Window):
         except:
             # first run, write default settings to config
             self.config.add_section('Translator')
+            self.config.set('Translator', 'api', 'Google')
             self.config.set('Translator', 'lang_from', 'english')
             self.config.set('Translator', 'lang_to', 'russian')
             self.config.set('Translator', 'one_direction', 'false')
@@ -215,13 +216,14 @@ class MainWindow(gtk.Window):
                 self.config.write(configfile)
                 
             
+        self.api_for_use = self.config.get('Translator', 'api')
         self.from_lang = self.config.get('Translator', 'lang_from')
         self.to_lang = self.config.get('Translator', 'lang_to')
         self.one_direction = self.config.getboolean('Translator', 'one_direction')
         self.hide_toolbar = self.config.getboolean('Translator', 'hide_toolbar')
 
         self.set_title('Gnotran - simple Gnome client for translators')
-        self.set_icon_from_file(os.path.join(IMAGES_dir, 'google-32x32.png'))
+        self.set_icon_from_file(os.path.join(IMAGES_dir, 'gnotran-64x64.png'))
         self.set_default_size(650, 550)
         self.set_resizable(True)
         self.set_position(gtk.WIN_POS_CENTER)
@@ -240,7 +242,11 @@ class MainWindow(gtk.Window):
 
         img3 = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'dictionary-16x16.png'))
         image_3 = gtk.Image()
-        image_3.set_from_pixbuf(img3)        
+        image_3.set_from_pixbuf(img3)
+
+        img4 = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'api-16x16.png'))
+        image_4 = gtk.Image()
+        image_4.set_from_pixbuf(img4)
 
 
         # file menu
@@ -289,6 +295,13 @@ class MainWindow(gtk.Window):
         self.m_toolbar.set_active(self.hide_toolbar)
         self.m_toolbar.connect('activate', self.show_hide_toolbar)
         editmenu.append(self.m_toolbar)
+
+        m_api = gtk.ImageMenuItem('_Select API', agr)
+        m_api.set_image(image_4)
+        key, mod = gtk.accelerator_parse('<Control>A')
+        m_api.add_accelerator('activate', agr, key, mod, gtk.ACCEL_VISIBLE)
+        m_api.connect('activate', self.select_api)
+        editmenu.append(m_api)
 
         # about menu
         aboutmenu = gtk.Menu()
@@ -454,12 +467,17 @@ class MainWindow(gtk.Window):
         img4 = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'dictionary-32x32.png'))
         image4 = gtk.Image()
         image4.set_from_pixbuf(img4)
+        img5 = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'api-32x32.png'))
+        image5 = gtk.Image()
+        image5.set_from_pixbuf(img5)        
 
 
         add_btn = gtk.ToolButton(image1, 'Language')
         add_btn.connect('clicked', self.choice_lang)
         dict_btn = gtk.ToolButton(image4, 'Dictionary')
         dict_btn.connect('clicked', self.call_dict)
+        api_btn = gtk.ToolButton(image5, 'Select API')
+        api_btn.connect('clicked', self.select_api)        
         about_btn = gtk.ToolButton(image2, 'About')
         about_btn.connect('clicked', self.about)
         exit_btn = gtk.ToolButton(image3, 'Exit')
@@ -467,7 +485,8 @@ class MainWindow(gtk.Window):
 
         self.toolbar.insert(add_btn, 0)
         self.toolbar.insert(dict_btn, 1)
-        self.toolbar.insert(about_btn, 2)
+        self.toolbar.insert(api_btn, 2)
+        self.toolbar.insert(about_btn, 3)
         self.toolbar.insert(exit_btn, -1)
 
         hbox = gtk.HBox(True, 20)
@@ -476,13 +495,23 @@ class MainWindow(gtk.Window):
 
         self.statusbar = gtk.Statusbar()
         self.progressbar = gtk.ProgressBar()
+        if self.api_for_use=='Google':
+            api_label = 'G'
+        elif self.api_for_use=='Microsoft':
+            api_label = 'M'
+        self.api_label = gtk.Label(api_label)
+
+        main_statusbar = gtk.HBox(False, 3)
+        main_statusbar.pack_start(self.api_label, False, False)
+        main_statusbar.pack_start(gtk.VSeparator(), False, False)
+        main_statusbar.pack_start(self.statusbar, True, True)
 
         self.vbox = gtk.VBox()
         self.vbox.pack_start(menubar, False, True)
         self.vbox.pack_start(self.toolbar, False, True)
         self.vbox.pack_start(gtk.HSeparator(), False, True)
         self.vbox.pack_start(hbox)
-        self.vbox.pack_start(self.statusbar, False, True)
+        self.vbox.pack_start(main_statusbar, False, True)
         self.vbox.pack_end(self.progressbar, False, False)
 
         self.add(self.vbox)
@@ -530,7 +559,51 @@ class MainWindow(gtk.Window):
         with open(C_F_P, 'wb') as configfile:
             self.config.write(configfile)
             
-      
+
+    def changed_select_api(self, widget, api_name=None):
+        if widget.get_active():
+            self.config.set('Translator', 'api', api_name)
+            with open(C_F_P, 'wb') as configfile:
+                self.config.write(configfile)
+            self.api_for_use = api_name
+            if api_name=='Google':
+                self.api_label.set_text('G')
+            elif api_name=='Microsoft':
+                self.api_label.set_text('M')
+
+
+    def select_api(self, widget):
+
+        
+        dialog = gtk.Dialog('Select API', None,
+                             gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+                            (gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,
+                             gtk.STOCK_OK, gtk.RESPONSE_OK))
+
+        my_vbox = gtk.VBox(False)
+        button_google = gtk.RadioButton(None, 'Google')
+        button_google.connect('toggled', self.changed_select_api, 'Google')
+        button_microsoft = gtk.RadioButton(button_google, 'Microsoft')
+        button_microsoft.connect('toggled', self.changed_select_api, 'Microsoft')
+        if self.api_for_use=='Google':
+            button_google.set_active(True)
+        elif self.api_for_use=='Microsoft':
+            button_microsoft.set_active(True)
+        my_vbox.pack_start(button_google, False, False)
+        my_vbox.pack_start(button_microsoft, False, False)
+        my_vbox.show_all()
+
+        dialog.vbox.pack_start(my_vbox)
+        dialog.set_resizable(False)
+        dialog.vbox.set_border_width(20)
+        dialog.set_icon_from_file(os.path.join(IMAGES_dir, 'api-32x32.png'))
+        response = dialog.run()
+        dialog.destroy()
+        if response == gtk.RESPONSE_OK:
+            pass
+            #change_lang(keys[combobox_1.get_active()], keys[combobox_2.get_active()])
+
+        
 
     def choice_lang(self, widget):
 
@@ -603,22 +676,22 @@ class MainWindow(gtk.Window):
     def about(self, widget):
         about = gtk.AboutDialog()
         about.set_program_name('Gnotran')
-        img = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'google-64x64.png'))
+        img = gtk.gdk.pixbuf_new_from_file(os.path.join(IMAGES_dir, 'gnotran-64x64.png'))
         about.set_logo(img)
         about.set_version(__version__)
-        about.set_copyright('Copyrights © 2010 Nikolay Blohin')
-        about.set_comments('Simple Gnome client for Google Translate')
+        about.set_copyright('Copyrights © 2010-2011 Nikolay Blohin')
+        about.set_comments('Simple Gnome client for translators')
         about.set_website('http://originalcoding.com')
         about.set_website_label('Original Coding')
         about.set_authors(['Author and developer:',
-                           '    Nikolay Blohin <nikolay@blohin.org>',
+                           '    Nikolay Blohin http://blohin.org',
                            '',
                            'Thanks for testing and comments:',
-                           '    Pavlo Kapyshin <i@93z.org>',
-                           '    Rick Vause <rvause@gmail.com>'])
+                           '    Pavlo Kapyshin http://93z.org',
+                           '    Rick Vause http://rickvause.com'])
         about.set_artists(['Thanks for beautiful icons:',
-                           '    Schollidesign http://schollidesign.deviantart.com',
-                           '    Eli http://eliburford.com'])
+                           '    Rick Vause http://rickvause.com',
+                           '    Schollidesign http://schollidesign.deviantart.com'])
         about.set_icon_from_file(os.path.join(IMAGES_dir, 'about-32x32.png'))
         about.run()
         about.destroy()
@@ -638,30 +711,63 @@ class MainWindow(gtk.Window):
             lines = text.split('\n')
             step_fraction = (1-fraction)/len(lines)
 
-            for line in lines:
-                url = 'http://ajax.googleapis.com/ajax/services/language/translate?v=1.0&q=' + urllib.quote(line) + '&langpair=' + c_from + '|' + c_to
+            if self.api_for_use=='Google':
 
-                try:
-                    server_response = urllib.urlopen(url)
-                    response_dict = json.load(server_response)
-                except:
-                    response_dict = False
+                for line in lines:
+                    url = 'http://ajax.googleapis.com/ajax/services/language/translate?v=1.0&q=' + urllib.quote(line) + '&langpair=' + c_from + '|' + c_to
 
-                gtk.gdk.threads_enter()
-                self.progressbar.set_fraction(fraction)
-                fraction += step_fraction
-                gtk.gdk.threads_leave()
+                    try:
+                        server_response = urllib.urlopen(url)
+                        response_dict = json.load(server_response)
+                    except:
+                        response_dict = False
 
-                if response_dict:
-                    if response_dict['responseStatus'] == 200:
-                        translation += response_dict['responseData']['translatedText'] + '\n'
+                    gtk.gdk.threads_enter()
+                    self.progressbar.set_fraction(fraction)
+                    fraction += step_fraction
+                    gtk.gdk.threads_leave()
+
+                    if response_dict:
+                        if response_dict['responseStatus'] == 200:
+                            translation += response_dict['responseData']['translatedText'] + '\n'
+                        else:
+                            translation += '\n'
+                        message = 'Translated successfully completed.'
                     else:
-                        translation += '\n'
-                    message = 'Translated successfully completed.'
-                else:
-                    translation = ''
-                    message = 'Translation Error (error connecting to Google). Try again later.'
-                    break
+                        translation = ''
+                        message = 'Translation Error (error connecting to Google). Try again later.'
+                        break
+                    
+            elif self.api_for_use== 'Microsoft':
+
+                for line in lines:
+                    if line=='':
+                        line = ' '
+                    url_part_1 = 'http://api.microsofttranslator.com/V2/Ajax.svc/GetTranslations?oncomplete=mycallback&appId=18148BBCC187B05F6D0B99CD249C60A833E67944&text='
+                    url_part_2 = '&from=%s&to=%s&maxTranslations=5' % (c_from, c_to)
+                    url = url_part_1 + urllib.quote(line) + url_part_2
+
+                    try:
+                        server_response = urllib.urlopen(url)
+                        s = server_response.read()
+                        s = s[14:]
+                        s = s.rstrip(');')
+                        response_dict = json.loads(s)                        
+                    except:
+                        response_dict = False
+
+                    gtk.gdk.threads_enter()
+                    self.progressbar.set_fraction(fraction)
+                    fraction += step_fraction
+                    gtk.gdk.threads_leave()
+
+                    if response_dict:
+                        translation += response_dict['Translations'][0]['TranslatedText'] + '\n'
+                        message = 'Translated successfully completed.'
+                    else:
+                        translation = ''
+                        message = 'Translation Error (error connecting to Microsoft). Try again later.'
+                        break
 
             gtk.gdk.threads_enter()
             translation = translation.replace('&#39;', '\'')
@@ -675,7 +781,11 @@ class MainWindow(gtk.Window):
 
 
         bar_id = self.statusbar.get_context_id('statusbar')
-        self.statusbar.push(bar_id, 'Request to Google...')
+        if self.api_for_use=='Google':
+            mess = 'Request to Google...'
+        elif self.api_for_use=='Microsoft':
+            mess = 'Request to Microsoft...'
+        self.statusbar.push(bar_id, mess)
 
         if widget.get_name() == 'Left Button':
             in_buffer = self.l_u_buffer
