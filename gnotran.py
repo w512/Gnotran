@@ -20,6 +20,7 @@ import json
 import urllib
 import threading
 import gtk
+import pango
 import ConfigParser
 
 
@@ -35,8 +36,8 @@ class DictWindow(gtk.Window):
         self.to_lang = to_lang
         
         self.set_title('Dictionary')
-        self.set_size_request(300, 500)
-        # self.set_position(gtk.WIN_POS_CENTER)
+        self.set_size_request(400, 500)
+        self.set_position(gtk.WIN_POS_CENTER)
         self.connect('destroy', self.close)
         self.set_icon_from_file(os.path.join(IMAGES_dir, 'dictionary-32x32.png'))
 
@@ -48,53 +49,77 @@ class DictWindow(gtk.Window):
         tmp_hbox = gtk.HBox(False)
         tmp_hbox.pack_start(self.word, True, True, 5)
         tmp_hbox.pack_start(self.s_button, False, False, 5)
-        self.vbox.pack_start(tmp_hbox, False, False, 10)
+        self.vbox.pack_start(tmp_hbox, False, False, 5)
+
+        self.word.connect('key-press-event', self.keypressed, self.s_button)
 
         # field to display
         self.textview = gtk.TextView()
         self.textview.set_editable(False)
+        self.textview.set_wrap_mode(gtk.WRAP_WORD)
+        self.textview.set_left_margin(3)
+        self.textview.set_right_margin(3)
+        self.buffer = self.textview.get_buffer()
+
+        # register tags for decoration
+        table = self.buffer.get_tag_table()
+        tag = gtk.TextTag('header')
+        #tag.set_property('foreground', '#999999')
+        #tag.set_property('size-points', 8)
+        tag.set_property('scale', pango.SCALE_LARGE)
+        tag.set_property('weight', pango.WEIGHT_HEAVY)
+        table.add(tag)        
+        
+        
         scroll = gtk.ScrolledWindow()
-        viewport = gtk.Viewport()
-        viewport.set_shadow_type(gtk.SHADOW_NONE)
-        result_box = gtk.VBox(False)
-        result_box.pack_start(self.textview, True, True, 10)
-        viewport.add(result_box)
-        viewport.set_border_width(20)
-        scroll.add(viewport)
+        scroll.add(self.textview)
         scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scroll.set_border_width(5)
+
+
         self.vbox.pack_start(scroll, True, True)
 
         self.add(self.vbox)
         self.show_all()
 
+    def keypressed(self, widget, event, button):
+        ''' Search when "Enter" pressed '''
+        if event.hardware_keycode in (36, 104):
+            self.s_button_clicked(button)
+            return True
+
 
     def s_button_clicked(self, widget):
         '''Search word and show result'''
         word = self.word.get_text()
-        f = self.from_lang
-        t = self.to_lang
-        url_part_1 = 'http://api.microsofttranslator.com/V2/Ajax.svc/GetTranslations?oncomplete=mycallback&appId=18148BBCC187B05F6D0B99CD249C60A833E67944&text='
-        url_part_2 = '&from=%s&to=%s&maxTranslations=5' % (t, f)
+        from wordnik import Wordnik
+        try:
+            w = Wordnik(api_key='dd675e8c15076cfab74220264da05468a5f14d1e46b5f63cc')
+            definitions = w.word_get_definitions(word)
+            examples = w.word_get_examples(word)
+        except:
+            definitions = False
+            examples = False
 
-        url = url_part_1 + word + url_part_2
-        #try:
-        server_response = urllib.urlopen(url)
-        s = server_response.read()
+        # colect name for all partOfSpeech in definitions
+        p_o_s = []
+        for i in definitions:
+            if not(i['partOfSpeech'] in p_o_s):
+                p_o_s.append(i['partOfSpeech'])
+        p_o_s.sort()
+        print len(p_o_s)
 
-        s = s[14:]
-        s = s.rstrip(');')
-        print 'After ****************************'
-        print s
-        print '**********************************'
-        print
-        
+        # write definitions
+        my_iter = self.buffer.get_start_iter()
+        for p in p_o_s:
+            tmp = p.capitalize() + '\n'
+            self.buffer.insert_with_tags_by_name(my_iter, tmp, 'header')
+            for d in definitions:
+                if d['partOfSpeech']==p:
+                    self.buffer.insert(my_iter, d['text'])
+                    self.buffer.insert(my_iter, '\n\n')
+            self.buffer.insert(my_iter, '\n')
 
-        response_dict = json.loads(s)
-        #except:
-        #    response_dict = False 
-        
-        text_buffer = self.textview.get_buffer()
-        text_buffer.set_text(response_dict['Translations'][0]['TranslatedText'])
 
 
     def close(self, widget):
