@@ -91,6 +91,9 @@ class DictWindow(gtk.Window):
 
     def s_button_clicked(self, widget):
         '''Search word and show result'''
+        # clear text field
+        self.buffer.set_text('')
+        
         word = self.word.get_text()
         from wordnik import Wordnik
         try:
@@ -107,7 +110,6 @@ class DictWindow(gtk.Window):
             if not(i['partOfSpeech'] in p_o_s):
                 p_o_s.append(i['partOfSpeech'])
         p_o_s.sort()
-        print len(p_o_s)
 
         # write definitions
         my_iter = self.buffer.get_start_iter()
