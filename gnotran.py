@@ -325,7 +325,7 @@ class MainWindow(gtk.Window):
 
         m_api = gtk.ImageMenuItem('_Select API', agr)
         m_api.set_image(image_4)
-        key, mod = gtk.accelerator_parse('<Control>A')
+        key, mod = gtk.accelerator_parse('<Control>S')
         m_api.add_accelerator('activate', agr, key, mod, gtk.ACCEL_VISIBLE)
         m_api.connect('activate', self.select_api)
         editmenu.append(m_api)
