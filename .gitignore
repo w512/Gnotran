@@ -1,1 +1,5 @@
 .bzr/
+.bzrignore
+gnotran.cfg
+.ropeproject/
+*.pyc
