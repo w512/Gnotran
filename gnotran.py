@@ -173,9 +173,7 @@ class DictWindow(gtk.Window):
 
             if examples:
                 # write examples
-                my_iter = self.buffer_2.get_start_iter()
-                print  examples['examples']
-                print 
+                my_iter = self.buffer_2.get_start_iter() 
                 for p in examples['examples']:
                     title = p['title'] + '\n'
                     text = p['text'] + '\n'
