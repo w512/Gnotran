@@ -7,11 +7,12 @@ Features:
     1. Very simple and easy to use.
     2. Two windows for the concurrent translate.
     3. Convenient interface.
+    4. English Dictionary: definitions, examples, related.
 
 '''
 
 __author__ = 'Nikolay Blohin (nikolay@blohin.org)'
-__version__ = '0.6.1'
+__version__ = '0.7.1'
 __copyright__ = 'Copyright (c) 2010-2011 Nikolay Blohin'
 __license__ = 'GNU General Public License'
 
@@ -61,23 +62,66 @@ class DictWindow(gtk.Window):
         self.textview.set_right_margin(3)
         self.buffer = self.textview.get_buffer()
 
-        # register tags for decoration
+        self.textview_2 = gtk.TextView()
+        self.textview_2.set_editable(False)
+        self.textview_2.set_wrap_mode(gtk.WRAP_WORD)
+        self.textview_2.set_left_margin(3)
+        self.textview_2.set_right_margin(3)
+        self.buffer_2 = self.textview_2.get_buffer()
+
+        self.textview_3 = gtk.TextView()
+        self.textview_3.set_editable(False)
+        self.textview_3.set_wrap_mode(gtk.WRAP_WORD)
+        self.textview_3.set_left_margin(3)
+        self.textview_3.set_right_margin(3)
+        self.buffer_3 = self.textview_3.get_buffer()        
+
+        # register tags for decoration for definitions
         table = self.buffer.get_tag_table()
         tag = gtk.TextTag('header')
         #tag.set_property('foreground', '#999999')
         #tag.set_property('size-points', 8)
         tag.set_property('scale', pango.SCALE_LARGE)
         tag.set_property('weight', pango.WEIGHT_HEAVY)
+        table.add(tag)
+
+        # register tags for decoration for examples
+        table = self.buffer_2.get_tag_table()
+        tag = gtk.TextTag('title')
+        tag.set_property('scale', pango.SCALE_SMALL)
+        tag.set_property('weight', pango.WEIGHT_HEAVY)
         table.add(tag)        
-        
+
+        tag2 = gtk.TextTag('highlight')
+        tag2.set_property('background', '#ccffcc')
+        table.add(tag2)        
         
         scroll = gtk.ScrolledWindow()
         scroll.add(self.textview)
         scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
         scroll.set_border_width(5)
 
+        scroll_2 = gtk.ScrolledWindow()
+        scroll_2.add(self.textview_2)
+        scroll_2.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scroll_2.set_border_width(5)
 
-        self.vbox.pack_start(scroll, True, True)
+        scroll_3 = gtk.ScrolledWindow()
+        scroll_3.add(self.textview_3)
+        scroll_3.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scroll_3.set_border_width(5)        
+
+        notebook = gtk.Notebook()
+        label = gtk.Label('Definitions')
+        label_2 = gtk.Label('Examples')
+        label_3 = gtk.Label('Related')
+        notebook.append_page(scroll, label)
+        notebook.append_page(scroll_2, label_2)
+        notebook.append_page(scroll_3, label_3)
+
+        self.vbox.pack_start(notebook, True, True)
+        self.statusbar = gtk.Statusbar()
+        self.vbox.pack_start(self.statusbar, False, True)
 
         self.add(self.vbox)
         self.show_all()
@@ -91,36 +135,93 @@ class DictWindow(gtk.Window):
 
     def s_button_clicked(self, widget):
         '''Search word and show result'''
+        def request_to_server(self, word):
+            from wordnik import Wordnik
+            bar_id = self.statusbar.get_context_id('statusbar')
+            gtk.gdk.threads_enter()
+            self.statusbar.push(bar_id, 'Request to server...')
+            gtk.gdk.threads_leave()
+            try:
+                w = Wordnik(api_key='dd675e8c15076cfab74220264da05468a5f14d1e46b5f63cc')
+                definitions = w.word_get_definitions(word)
+                examples = w.word_get_examples(word)
+                related = w.word_get_related(word)
+            except:
+                definitions = False
+                examples = False
+                related = False
+
+
+            if definitions:
+                # colect name for all partOfSpeech in definitions
+                p_o_s = []
+                for i in definitions:
+                    if not(i['partOfSpeech'] in p_o_s):
+                        p_o_s.append(i['partOfSpeech'])
+                p_o_s.sort()
+
+                # write definitions
+                my_iter = self.buffer.get_start_iter()
+                for p in p_o_s:
+                    tmp = p.capitalize() + '\n'
+                    self.buffer.insert_with_tags_by_name(my_iter, tmp, 'header')
+                    for d in definitions:
+                        if d['partOfSpeech']==p:
+                            self.buffer.insert(my_iter, d['text'])
+                            self.buffer.insert(my_iter, '\n\n') 
+
+
+            if examples:
+                # write examples
+                my_iter = self.buffer_2.get_start_iter()
+                print  examples['examples']
+                print 
+                for p in examples['examples']:
+                    title = p['title'] + '\n'
+                    text = p['text'] + '\n'
+                    self.buffer_2.insert_with_tags_by_name(my_iter, title, 'title')
+                    self.buffer_2.insert(my_iter, text)
+                    self.buffer_2.insert(my_iter, '\n\n')
+
+                # highlighting words in examples
+                search_str =  word
+                start_iter =  self.buffer_2.get_start_iter()
+                s = True
+                while s:
+                    found = start_iter.forward_search(search_str, 0, None)
+                    if found:
+                        match_start, match_end = found # add this line to get match_start and match_end
+                        self.buffer_2.apply_tag_by_name('highlight', match_start, match_end)
+                        start_iter =  match_end
+                    else:
+                        s = False
+
+            if related:
+                # write related
+                my_iter = self.buffer_3.get_start_iter()
+                for p in related[0]['words']:
+                    text = p + '\n\n'
+                    self.buffer_3.insert(my_iter, text)
+
+
+            gtk.gdk.threads_enter()
+            self.statusbar.pop(bar_id)
+            if (definitions and examples and related):
+                self.statusbar.push(bar_id, 'Request successfully completed.')
+            else:
+                self.statusbar.push(bar_id, 'Request Error. Try again later.')
+            gtk.gdk.threads_leave()
+
+
+            
         # clear text field
-        self.buffer.set_text('')
-        
+        self.buffer.set_text('')        
+        self.buffer_2.set_text('')        
+        self.buffer_3.set_text('')        
         word = self.word.get_text()
-        from wordnik import Wordnik
-        try:
-            w = Wordnik(api_key='dd675e8c15076cfab74220264da05468a5f14d1e46b5f63cc')
-            definitions = w.word_get_definitions(word)
-            examples = w.word_get_examples(word)
-        except:
-            definitions = False
-            examples = False
-
-        # colect name for all partOfSpeech in definitions
-        p_o_s = []
-        for i in definitions:
-            if not(i['partOfSpeech'] in p_o_s):
-                p_o_s.append(i['partOfSpeech'])
-        p_o_s.sort()
-
-        # write definitions
-        my_iter = self.buffer.get_start_iter()
-        for p in p_o_s:
-            tmp = p.capitalize() + '\n'
-            self.buffer.insert_with_tags_by_name(my_iter, tmp, 'header')
-            for d in definitions:
-                if d['partOfSpeech']==p:
-                    self.buffer.insert(my_iter, d['text'])
-                    self.buffer.insert(my_iter, '\n\n')
-            self.buffer.insert(my_iter, '\n')
+        mythread = threading.Thread(target=request_to_server, args=(self, word))
+        mythread.start()
+        
 
 
 
@@ -708,14 +809,16 @@ class MainWindow(gtk.Window):
         about.set_version(__version__)
         about.set_copyright('Copyrights © 2010-2011 Nikolay Blohin')
         about.set_comments('Simple Gnome client for translators')
-        about.set_website('http://originalcoding.com')
-        about.set_website_label('Original Coding')
+        about.set_website('http://blohin.org')
         about.set_authors(['Author and developer:',
                            '    Nikolay Blohin http://blohin.org',
                            '',
                            'Thanks for testing and comments:',
                            '    Pavlo Kapyshin http://93z.org',
-                           '    Rick Vause http://rickvause.com'])
+                           '    Rick Vause http://rickvause.com',
+                           '',
+                           'Thanks for Dictionary API:',
+                           '    Wordnik http://wordnik.com'])
         about.set_artists(['Thanks for beautiful icons:',
                            '    Rick Vause http://rickvause.com',
                            '    Schollidesign http://schollidesign.deviantart.com'])
